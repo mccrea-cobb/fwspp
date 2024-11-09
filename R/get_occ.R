@@ -14,43 +14,40 @@
 #' @param limit Numeric value indicating the maximum number of records to return on each query attempt
 #'
 #' @noRd
-get_GBIF <- function(prop, timeout, limit = 200000, start_date) {
+get_GBIF <- function(prop, timeout, limit = 100000, start_date) {
 
-  message("Querying the Global Biodiversity Information Facility (GBIF) last interpreted from ",format(start_date, "%b %d %Y"), " to present...")
+  message("Querying the Global Biodiversity Information Facility (GBIF) last interpreted from ", format(start_date, "%b %d %Y"), " to present...")
 
   # We want to capture media, if available, so can't use 'spocc' call to GBIF
   try_gbif_count <- try_verb_n(gbif_count)
   try_gbif <- try_verb_n(rgbif::occ_search)
-  today<-as.POSIXlt(Sys.time())
+  today <- as.Date(Sys.time())
 
+  start_yr <- format(as.Date(start_date, format = "%Y-%m-%d"), "%Y")
   curr_yr <- as.POSIXlt(Sys.time())$year + 1900
-
 
   # Hoop-jumping to retrieve more records, if necessary
   #q_recs <- try_gbif_count(prop)
-  q_recs <- try_gbif_count(prop,lastInterpreted = paste0(format(start_date, format="%Y"),"-",
-                                                         format(start_date, format="%m"),"-",
-                                                         format(start_date, format="%d"),",",
-                                                         format(today, format="%Y"),"-",
-                                                         format(today, format="%m"),"-",
-                                                         format(today, format="%d")))
+  q_recs <- try_gbif_count(prop, lastInterpreted = paste0(as.character(start_date), ",", as.character(today)))
 
   if (q_recs == 0) {
-    message("No records found.")
+    message("  No records found.")
     return(NULL)
   }
-  message("Retrieving ", q_recs, " records.")
-  if (q_recs > 50000) {
-    message("Splitting the GBIF query temporally to recover all records.")
+  message("  Retrieving ", q_recs, " records.")
+
+  if (q_recs > 90000) {
+    message("    Splitting the GBIF query temporally to recover all records.")
     # Finding year breaks
-    n_grp <- ceiling(q_recs/50000)
+    n_grp <- ceiling(q_recs/90000)
     yr_bnd_l <- integer(0)
 
     for (yr in curr_yr:start_yr) {
-      cutoff <- 50000 * (length(yr_bnd_l) + 1)
+      cutoff <- 90000 * (length(yr_bnd_l) + 1)
       yr_rng <- paste(yr, curr_yr, sep = ",")
       n_recs <- try_gbif_count(prop,
                                year = yr_rng,
+                               hasCoordinate = TRUE,
                                lastInterpreted = paste0(format(start_date, format="%Y"),"-",
                                                         format(start_date, format="%m"),"-",
                                                         format(start_date, format="%d"),",",
@@ -75,10 +72,11 @@ get_GBIF <- function(prop, timeout, limit = 200000, start_date) {
 
     for (i in seq_along(yr_bnd_l)) {
       yr_rng <- paste(yr_bnd_l[i], yr_bnd_h[i], sep = ",")
-      message("  Processing occurrence records from ", sub(",", " - ", yr_rng))
+      message("    Processing occurrence records from ", sub(",", "-", yr_rng))
       tmp <- try_gbif(limit = limit, year = yr_rng,
                       geometry = get_wkt(prop),
-                      curlopts = list(timeout = (timeout+10)),
+                      hasCoordinate = TRUE,
+                      curlopts = list(timeout = (timeout + 10)),
                       lastInterpreted = paste0(format(start_date, format="%Y"),"-",
                                                format(start_date, format="%m"),"-",
                                                format(start_date, format="%d"),",",
@@ -91,18 +89,15 @@ get_GBIF <- function(prop, timeout, limit = 200000, start_date) {
   } else {
     gbif_recs <- try_gbif(limit = min(limit, q_recs),
                           geometry = get_wkt(prop),
-                          curlopts = list(timeout = (timeout+10)),
-                          lastInterpreted = paste0(format(start_date, format="%Y"),"-",
-                                                   format(start_date, format="%m"),"-",
-                                                   format(start_date, format="%d"),",",
-                                                   format(today, format="%Y"),"-",
-                                                   format(today, format="%m"),"-",
-                                                   format(today, format="%d")))
+                          hasCoordinate = TRUE,
+                          curlopts = list(timeout = (timeout + 10))
+                          )
   }
   gbif_recs$meta$count <- q_recs
   class(gbif_recs) <- "gbif"
-  if(nrow(gbif_recs$data)==0){
-    gbif_recs<-NULL
+
+  if(nrow(gbif_recs$data) == 0) {
+    gbif_recs <- NULL
   }
   gbif_recs
 }
@@ -115,7 +110,7 @@ get_GBIF <- function(prop, timeout, limit = 200000, start_date) {
 #' @param timeout numeric value specifying the time to wait for records to return in seconds
 #'
 #' @noRd
-get_iDigBio <- function(lat_range, lon_range, timeout,start_date) {
+get_iDigBio <- function(lat_range, lon_range, timeout, start_date) {
 
   message("Querying Integrated Digitized Biocollections (iDigBio) last modified from ",format(start_date, "%b %d %Y"), " to present...")
 
@@ -136,10 +131,10 @@ get_iDigBio <- function(lat_range, lon_range, timeout,start_date) {
   q_recs <- try_idb_count(rq = rq)
 
   if (q_recs == 0) {
-    message("No records found.")
+    message("  No records found.")
     idb_recs<-NULL
   } else{
-    message("Retrieving ", q_recs, " records.")
+    message("  Retrieving ", q_recs, " records.")
     idb_recs <- try_idb(type = "records", mq = FALSE, rq = rq, fields = "all",
                         max_items = 100000, limit = 0, offset = 0, sort = FALSE,
                         httr::config(timeout = timeout))
@@ -163,7 +158,7 @@ get_VertNet <- function(center, radius, timeout, limit = 10000, prop, start_date
 
   today<-as.POSIXlt(Sys.time())
 
-  message("Querying VertNet last indexed from ",format(start_date, "%b %d %Y"), " to present...")
+  message("Querying VertNet from ",format(start_date, "%b %d %Y"), " to present...")
 
   try_vertnet_count <- try_verb_n(vertnet_count)
   # VertNet balks on large requests sometimes, returning no matches for a good query
@@ -171,8 +166,8 @@ get_VertNet <- function(center, radius, timeout, limit = 10000, prop, start_date
   i <- 1
   q_recs <- 0
 
-  message("Attempting to query VertNet three times...")
-  VertNet_try <- c("First try...", "Second try...", "Third and final try...")
+  message("  Attempting to query VertNet three times...")
+  VertNet_try <- c("    First try...", "    Second try...", "    Third and final try...")
   while (i <= 3) {
     message(VertNet_try[i])
     q_recs <- try_vertnet_count(center, radius)
@@ -183,10 +178,10 @@ get_VertNet <- function(center, radius, timeout, limit = 10000, prop, start_date
   }
 
   if (q_recs == 0) {
-    message("No records found.")
+    message("  No records found.")
     return(NULL)
   }
-  message("Retrieving > ", q_recs, " records.")
+  message("  Retrieving > ", q_recs, " records.")
 
   # `spocc` doesn't currently allow geographic searches with VertNet while `rvertnet` does
   try_vn <- try_verb_n(rvertnet::spatialsearch)
@@ -195,64 +190,63 @@ get_VertNet <- function(center, radius, timeout, limit = 10000, prop, start_date
   #off data (when a section is greater than 1000)
 
   if (q_recs < 5000) {
-    link<-paste0("http://api.vertnet-portal.appspot.com/api/search?q=%7B%22q%22:%22distance%28location,geopoint%28",
-                 center[2],",",center[1],"%29%29%3C",radius,"%22,%22l%22:100%7D")
+    link <- paste0("http://api.vertnet-portal.appspot.com/api/search?q=%7B%22q%22:%22distance%28location,geopoint%28",
+                 center[2], "," ,center[1], "%29%29%3C", radius, "%22,%22l%22:100%7D")
 
     combined_df<-as.data.frame(try_JSON(
       rawToChar(
         httr::GET(link)$content))$recs)
 
     i<-length(unique(combined_df$references))
-    while (i==100){
-      cursor_temp<-try_JSON(
+    while (i == 100){
+      cursor_temp <- try_JSON(
         rawToChar(
           httr::GET(link)$content))$cursor
       link<-paste0("http://api.vertnet-portal.appspot.com/api/search?q=%7B%22q%22:%22distance%28location,geopoint%28",
-                   center[2],",",center[1],"%29%29%3C",radius,"%22,%22l%22:100,%22c%22:%22",cursor_temp,"%22}")
-      df_temp<-as.data.frame(try_JSON(
+                   center[2], "," ,center[1], "%29%29%3C", radius, "%22,%22l%22:100,%22c%22:%22", cursor_temp, "%22}")
+      df_temp <- as.data.frame(try_JSON(
         rawToChar(
           httr::GET(link)$content))$recs)
-      i<-length(unique(df_temp$references))
+      i <- length(unique(df_temp$references))
 
-      combined_df<-bind_rows(combined_df,df_temp)
+      combined_df <- bind_rows(combined_df,df_temp)
       print(nrow(combined_df))
       rm(df_temp)
       rm(cursor_temp)
     }
-    vn_recs<-combined_df
+    vn_recs <- combined_df
   } else {
-
     diced <- dice_prop(prop)
-    vn_recs_1<-list()
+    vn_recs_1 <- list()
     for (d in 1:nrow(diced)) {
       tmp <- diced[d, ]
       tmp_bb <- matrix(sf::st_bbox(tmp), 2)
       tmp_cent <- rowMeans(tmp_bb)
       tmp_radius <- geosphere::distVincentyEllipsoid(tmp_cent, t(tmp_bb))
       tmp_radius <- ceiling(max(tmp_radius))
-      link<-paste0("http://api.vertnet-portal.appspot.com/api/search?q=%7B%22q%22:%22distance%28location,geopoint%28",
-                   tmp_cent[2],",",tmp_cent[1],"%29%29%3C",tmp_radius,"%22,%22l%22:100%7D")
-      combined_df<-as.data.frame(try_JSON(
+      link <- paste0("http://api.vertnet-portal.appspot.com/api/search?q=%7B%22q%22:%22distance%28location,geopoint%28",
+                   tmp_cent[2], ",", tmp_cent[1], "%29%29%3C", tmp_radius, "%22,%22l%22:100%7D")
+      combined_df <- as.data.frame(try_JSON(
         rawToChar(
           httr::GET(link)$content))$recs)
 
-      i<-length(unique(combined_df$references))
-      while (i==100){
-        cursor_temp<-try_JSON(
+      i <- length(unique(combined_df$references))
+      while (i == 100){
+        cursor_temp <- try_JSON(
           rawToChar(
             httr::GET(link)$content))$cursor
-        link<-paste0("http://api.vertnet-portal.appspot.com/api/search?q=%7B%22q%22:%22distance%28location,geopoint%28",
-                     tmp_cent[2],",",tmp_cent[1],"%29%29%3C",tmp_radius,"%22,%22l%22:100,%22c%22:%22",cursor_temp,"%22}")
-        df_temp<-as.data.frame(try_JSON(
+        link <- paste0("http://api.vertnet-portal.appspot.com/api/search?q=%7B%22q%22:%22distance%28location,geopoint%28",
+                     tmp_cent[2], "," ,tmp_cent[1], "%29%29%3C", tmp_radius, "%22,%22l%22:100,%22c%22:%22", cursor_temp, "%22}")
+        df_temp <- as.data.frame(try_JSON(
           rawToChar(
             httr::GET(link)$content))$recs)
-        i<-length(unique(df_temp$references))
+        i <- length(unique(df_temp$references))
 
-        combined_df<-bind_rows(combined_df,df_temp)
+        combined_df <- bind_rows(combined_df, df_temp)
         rm(df_temp)
         rm(cursor_temp)
       }
-      vn_recs_1[[d]]<-combined_df
+      vn_recs_1[[d]] <- combined_df
       vn_recs <- bind_rows(vn_recs_1) %>% distinct()
     }
   }
@@ -273,12 +267,12 @@ get_VertNet <- function(center, radius, timeout, limit = 10000, prop, start_date
   #vn_recs <- bind_rows(vn_recs) %>% distinct()
   #nrow(vn_recs)
   #edit####
-  vn_recs<-vn_recs[as.Date(vn_recs$lastindexed)>start_date,]
-  if(nrow(vn_recs)==0){
-    vn_recs<-NULL
-    message("No records indexed after ",format(start_date, "%b %d %Y"))
+  vn_recs <- vn_recs[as.Date(vn_recs$lastindexed) > as.Date(start_date), ]
+  if(nrow(vn_recs) == 0){
+    vn_recs <- NULL
+    message("  No records indexed after ", format(start_date, "%b %d %Y"))
   } else{
-  message(nrow(vn_recs), " records retrieved indexed after ",format(start_date, "%b %d %Y"))
+  message("  ", nrow(vn_recs), " records retrieved indexed after ", format(start_date, "%b %d %Y"))
     }
   vn_recs
 }
@@ -294,7 +288,7 @@ get_VertNet <- function(center, radius, timeout, limit = 10000, prop, start_date
 #'
 #' @noRd
 get_EcoEngine <- function(lat_range, lon_range, timeout) {
-  timeout<-timeout+1
+  timeout <- timeout + 1
   message("Querying the Berkeley Ecoinformatics Engine (all records)...")
 
   # Could use `spocc` but why start now...
@@ -312,7 +306,7 @@ get_EcoEngine <- function(lat_range, lon_range, timeout) {
     )
     if (!is_error(ee_recs) || i == 3) break
     if (grepl("Count not greater than 0", ee_recs$error$message)) {
-      message("No records found.")
+      message("  No records found.")
       return(NULL)
     }
     wait <- stats::runif(1, min(5 ^ i, 120), min(5 ^ (i + 1), 180))
@@ -327,7 +321,7 @@ get_EcoEngine <- function(lat_range, lon_range, timeout) {
       stop(ee_recs$error$message)
   }
   if(!is.null(ee_recs$result)){
-    message("Retrieving ", ee_recs$result$results, " records.")
+    message("  Retrieving ", ee_recs$result$results, " records.")
   }
   ee_recs$result
 }
@@ -354,11 +348,11 @@ get_AntWeb <- function(lat_range, lon_range, timeout) {
   res <- jsonlite::fromJSON(httr::content(res, "text", encoding = "UTF-8"), FALSE)  # problem lies here...
 
   if (res$metaData$count == 0) {
-    message("No records found.")
+    message("  No records found.")
     return(NULL)
   }
   if (res$metaData$count > 10000) message("Only first 10000 matching AntWeb records returned.")
-  message("Retrieving ", min(res$metaData$count, 10000), " records.")
+  message("  Retrieving ", min(res$metaData$count, 10000), " records.")
 
   aw_recs <- lapply(res$specimens, function(x) {
     has_image <- "images" %in% names(x)
@@ -377,7 +371,7 @@ get_AntWeb <- function(lat_range, lon_range, timeout) {
 #'
 #' @noRd
 get_ServCat <- function(prop,start_date) {
-  message("Querying ServCat issued from ",format(start_date, "%b %d %Y"), " to present...")
+  message("Querying ServCat references issued ", format(start_date, "%b %d %Y"), " to present...")
 
   try_JSON <- try_verb_n(jsonlite::fromJSON, 4)
 
@@ -411,6 +405,8 @@ get_ServCat <- function(prop,start_date) {
                                                           ), auto_unbox = TRUE),
                                                           httr::add_headers("Content-Type" = "application/json"), httr::timeout(100000))$content))$items)
 
-  ServCat_df <- ServCat_df[as.Date(ServCat_df$dateOfIssue)>start_date, ]
+  ServCat_df <- ServCat_df[as.Date(ServCat_df$dateOfIssue) > as.Date(start_date), ]
+  message("   Retrieved ", length(ServCat_df), " records.")
+
   ServCat_df
 }

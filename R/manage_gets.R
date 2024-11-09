@@ -28,7 +28,7 @@ manage_gets <- function(prop, timeout, start_date) {
   #q_recs <- try_gbif_count(prop)
   today <- as.POSIXlt(Sys.time())
 
-  q_recs <- try_gbif_count(prop,lastInterpreted = paste0(format(start_date, format="%Y"),"-",
+  q_recs <- try_gbif_count(prop, lastInterpreted = paste0(format(start_date, format="%Y"),"-",
                                                          format(start_date, format="%m"),"-",
                                                          format(start_date, format="%d"),",",
                                                          format(today, format="%Y"),"-",
@@ -63,19 +63,19 @@ manage_gets <- function(prop, timeout, start_date) {
     idb_recs <- clean_iDigBio(idb_recs)
 
   # VertNet
-  vn_recs <- get_VertNet(rowMeans(bb), radius, timeout, prop = prop, start_date = start_date)
-  if (!is.null(vn_recs))
-    vn_recs <- clean_VertNet(vn_recs)
+  # vn_recs <- get_VertNet(rowMeans(bb), radius, timeout, prop = prop, start_date = start_date)
+  # if (!is.null(vn_recs))
+  #   vn_recs <- clean_VertNet(vn_recs)
 
-  # Berkeley 'Ecoinformatics' Engine (EcoEngine R package is depricated)
+  # Berkeley 'Ecoinformatics' Engine (EcoEngine R package is deprecated)
   # ee_recs <- get_EcoEngine(lat_range, lon_range, timeout)
   # if (!is.null(ee_recs))
   #   ee_recs <- clean_EcoEngine(ee_recs)
 
   # ServCat
-  ServCat_recs <- get_ServCat(prop, start_date = start_date)
-  if (!is.null(ServCat_recs))
-   ServCat_recs <- suppressMessages({clean_ServCat(ServCat_recs, prop = prop)})
+  # ServCat_recs <- get_ServCat(prop, start_date = start_date)
+  # if (!is.null(ServCat_recs))
+  #  ServCat_recs <- suppressMessages({clean_ServCat(ServCat_recs, prop = prop)})
 
   ## AntWeb  (not working for Alaska, so commented out)
   # aw_recs <- get_AntWeb(lat_range, lon_range, timeout)
@@ -88,9 +88,9 @@ manage_gets <- function(prop, timeout, start_date) {
   } else {
     bind_rows(gbif_recs,
               idb_recs,
-              vn_recs,
+              vn_recs
               # ee_recs,
-              ServCat_recs
+              # ServCat_recs
               # aw_recs  # Drop AntWeb, doesn't work for AK
     ) %>%
       # Drop records with no species ID or monomials (e.g., genus only)

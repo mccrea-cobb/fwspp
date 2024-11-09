@@ -205,7 +205,8 @@ fws_occ <- function(fws = NULL, bnd = c("admin", "acq"),
 
   attributes(out) <- list(names = fws$ORGNAME,
                           class = "fwspp",
-                          boundary = bnd, scrubbing = scrub,
+                          boundary = bnd,
+                          scrubbing = scrub,
                           buffer_km = buffer,
                           query_dt = start_time)
 

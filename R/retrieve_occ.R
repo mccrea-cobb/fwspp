@@ -22,7 +22,6 @@ retrieve_occ <- function(props, prop, buffer, scrub, timeout = NULL, start_date)
   org_name <- prop
   short_org <- Cap(org_name) %>% shorten_orgnames()
   prop <- props[props$ORGNAME == prop, ]
-  # start_yr <- start_yr
 
   # Consider buffer
   if (buffer) prop <- buffer_prop(prop, buffer)
